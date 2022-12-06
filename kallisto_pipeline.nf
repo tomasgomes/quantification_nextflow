@@ -24,7 +24,7 @@ params.transcriptome = false
 params.transindex = false
 //params.transindex = "AmexT_v47_artificial.kalid"
 params.reads = false
-//params.reads = "/links/groups/treutlein/USERS/tomasgomes/projects/axolotl/data/raw/Gerber_all10x/GER006_10x/*.fastq.gz" 
+//params.reads = "/links/groups/treutlein/USERS/tomasgomes/projects/axolotl/data/raw/Gerber_all10x/GER006_10x/*.fastq.gz"
 params.white = false
 //params.white = "/links/groups/treutlein/USERS/tomasgomes/gene_refs/other/10xv2_whitelist.txt"
 params.t2g = false
@@ -99,13 +99,13 @@ if(file("${params.outdir}${params.samplename}").exists()) println "Output folder
  * Step 0. For some reason pseudoalignment doesn't work if it is the first step
  */
 process starting{
- 
+
     script:
     """
     echo Pseudoalignment doesn't work as a first step, so we'll have this here.
     """
 }
- 
+
 /*
  * Step 1. Builds the transcriptome index, if it doesn't exist
  */
@@ -114,13 +114,13 @@ process index {
     // when index does not exist, it is stored in the transcriptome dir
     //publishDir transcriptome_file.getParent(), mode: 'copy'
     storeDir transcriptome_file.getParent()
-    
+
     input:
     file transcriptome_file
-    
+
     output:
     file params.transindex into transcriptome_index
-  
+
     script:
     """
     kallisto index -i ${params.transindex} -k 31 --make-unique ${transcriptome_file}
@@ -132,14 +132,14 @@ process index {
  */
 process pseudoalPlate {
     storeDir params.outdir
-    
+
     input:
     file index from transcriptome_index
     file batchkal from batch_kal.collect()
-    
+
     output:
     file params.samplename into kallisto_pseudo
-    
+
     when: params.protocol=='plate'
 
     script:
@@ -168,7 +168,7 @@ process pseudoal {
     file "${params.samplename}/output.bus"
     file "${params.samplename}/matrix.ec"
     file "${params.samplename}/transcripts.txt"
-    
+
     when: params.protocol!='plate'
 
     script:
@@ -209,7 +209,7 @@ process corrsort {
     file "${outbus}/output.cor.sort.bus"
     file outbus into kal_sort_to_count
     file outbus into kal_sort_to_umi
-    
+
     when: params.protocol!='plate'
 
     script:
@@ -225,13 +225,13 @@ process corrsort {
 process umicounts {
 
     storeDir params.outdir
-    
+
     input:
     file outbus from kal_sort_to_umi
 
     output:
     file "${outbus}/umicount.txt" into kallisto_umic
-    
+
     when: params.protocol!='plate'
 
     script:
@@ -254,7 +254,7 @@ process countbus {
     output:
     file "${outbus}/genecounts.mtx"
     file outbus into kallisto_count
-    
+
     when: params.protocol!='plate'
 
     script:
@@ -269,20 +269,20 @@ process countbus {
 process makeSeuratPlate {
 
     storeDir "${params.outdir}/${params.samplename}"
-    
+
     input:
     file outps from kallisto_pseudo
     file t2g from t2g_plate.collect()
-    
+
     output:
     file "${params.samplename}_srat.RDS"
-    
+
     when: params.protocol=='plate'
-    
+
     script:
     """
     #!/usr/local/bin/Rscript --vanilla
-    
+
     library(Seurat)
 
     # read in data
@@ -292,25 +292,27 @@ process makeSeuratPlate {
     g = read.csv(paste0(topdir, "/transcripts.txt"), header = F, stringsAsFactors = F)
     dimnames(exp) = list(paste0(bc\$V1,"-1"),g\$V1) # number added because of seurat format for barcodes
     count.data = Matrix::t(exp)
-    
+
     # summarise transcripts by gene name
     t2g = read.table("$t2g", header = F, stringsAsFactors = F, sep = "\t")
     exp_gene = rowsum(as.matrix(count.data), t2g\$V2)
 
     # create Seurat object
     srat = CreateSeuratObject(counts = exp_gene)
-    
+
     # get MT% (genes curated from NCBI chrMT genes)
-    mtgenes = c("COX1", "COX2", "COX3", "ATP6", "ND1", "ND5", "CYTB", "ND2", "ND4", 
+    mtgenes = c("COX1", "COX2", "COX3", "ATP6", "ND1", "ND5", "CYTB", "ND2", "ND4",
                 "ATP8", "MT-CO1", "COI", "LOC9829747")
     mtgenes = c(mtgenes, paste0("MT", mtgenes), paste0("MT-", mtgenes))
-    mtgenes = mtgenes[mtgenes %in% rownames(exp_gene)]
-    srat = PercentageFeatureSet(srat, col.name = "percent.mt", assay = "RNA", 
+    mtall = paste0("-",paste(mtgenes, collapse="\$|-"))
+    mtgenes = grep(mtall, rownames(srat), value = T, ignore.case = T)
+    #mtgenes = mtgenes[mtgenes %in% rownames(exp_gene)]
+    srat = PercentageFeatureSet(srat, col.name = "percent.mt", assay = "RNA",
                                 features = mtgenes)
-    
+
     saveRDS(srat, file = "${params.samplename}_srat.RDS")
     """
-    
+
 }
 
 /*
@@ -323,21 +325,21 @@ process makeSeurat10x {
     input:
     file outbus from kallisto_count
     file umic from kallisto_umic.collect()
-    
+
     output:
     file "${params.samplename}_UMIrank.pdf"
     file "${params.samplename}_UMIduplication.pdf"
     file "${params.samplename}_srat.RDS"
-    
+
     when: params.protocol=='10xv3' || params.protocol=='10xv2'
 
     script:
     """
     #!/usr/local/bin/Rscript --vanilla
-    
+
     library(Seurat)
     library(DropletUtils)
-    
+
     # read in data
     topdir = "${outbus}" # source dir
     exp = Matrix::readMM(paste0(topdir, "/genecounts.mtx")) #read matrix
@@ -345,7 +347,7 @@ process makeSeurat10x {
     g = read.csv(paste0(topdir, "/genecounts.genes.txt"), header = F, stringsAsFactors = F)
     dimnames(exp) = list(paste0(bc\$V1,"-1"),g\$V1) # number added because of seurat format for barcodes
     count.data = Matrix::t(exp)
-    
+
     # get emptyDrops and default cutoff cell estimates
     iscell_dd = defaultDrops(count.data, expected = 5000)
     eout = emptyDrops(count.data, lower = 200)
@@ -353,7 +355,7 @@ process makeSeurat10x {
     iscell_ed = eout\$FDR<=0.01
     meta = data.frame(row.names = paste0(bc\$V1,"-1"),
                       iscell_dd = iscell_dd, iscell_ed = iscell_ed)
-                      
+
     # plot rankings for number of UMI
     br.out <- barcodeRanks(count.data)
     pdf("${params.samplename}_UMIrank.pdf", height = 5, width = 5, useDingbats = F)
@@ -362,10 +364,10 @@ process makeSeurat10x {
     lines(br.out\$rank[o], br.out\$fitted[o], col="red")
     abline(h=metadata(br.out)\$knee, col="dodgerblue", lty=2)
     abline(h=metadata(br.out)\$inflection, col="forestgreen", lty=2)
-    legend("bottomleft", lty=2, col=c("dodgerblue", "forestgreen"), 
+    legend("bottomleft", lty=2, col=c("dodgerblue", "forestgreen"),
         legend=c("knee", "inflection"))
     dev.off()
-    
+
     # UMI duplication
     umi = read.table("${umic}", sep = "\t", header = F, stringsAsFactors = F)
     sumUMI = c()
@@ -373,31 +375,31 @@ process makeSeurat10x {
     for(i in 0:250){ sumUMI = c(sumUMI, sum(umi\$V4[umi\$V4>i])/sumi) }
     pdf("${params.samplename}_UMIduplication.pdf", height = 3.5, width = 7, useDingbats = F)
     par(mfrow = c(1,2))
-    plot(sumUMI, ylim = c(0,1), pch = 20, col = "grey30", ylab = "% of total reads", 
+    plot(sumUMI, ylim = c(0,1), pch = 20, col = "grey30", ylab = "% of total reads",
          xlab = "More than xx UMI", main = "${params.samplename}")
     diffUMI = sumUMI[-length(sumUMI)] - sumUMI[-1]
-    plot(diffUMI, ylim = c(0,0.2), pch = 20, col = "grey30", ylab = "Change in % of total reads", 
+    plot(diffUMI, ylim = c(0,0.2), pch = 20, col = "grey30", ylab = "Change in % of total reads",
          xlab = "More than xx UMI", main = "${params.samplename}")
     dev.off()
 
     # create Seurat object
     ## we're only keeping what might potentially be a cell (by DD or ED)
-    srat = CreateSeuratObject(counts = count.data[,iscell_dd | iscell_ed], 
+    srat = CreateSeuratObject(counts = count.data[,iscell_dd | iscell_ed],
                               meta.data = meta[iscell_dd | iscell_ed,])
     amb_prop = estimateAmbience(count.data)[rownames(srat@assays\$RNA@meta.features)]
     srat@assays\$RNA@meta.features = data.frame(row.names = rownames(srat@assays\$RNA@meta.features),
                                                 "ambient_prop" = amb_prop)
-    
+
     # get MT% (genes curated from NCBI chrMT genes)
-    mtgenes = c("COX1", "COX2", "COX3", "ATP6", "ND1", "ND5", "CYTB", "ND2", "ND4", 
+    mtgenes = c("COX1", "COX2", "COX3", "ATP6", "ND1", "ND5", "CYTB", "ND2", "ND4",
                 "ATP8", "MT-CO1", "COI", "LOC9829747")
     mtgenes = c(mtgenes, paste0("MT", mtgenes), paste0("MT-", mtgenes))
     mtall = paste0("-",paste(mtgenes, collapse="\$|-"))
     mtgenes = grep(mtall, rownames(srat), value = T, ignore.case = T)
     #mtgenes = mtgenes[mtgenes %in% g[,1]]
-    srat = PercentageFeatureSet(srat, col.name = "percent.mt", assay = "RNA", 
+    srat = PercentageFeatureSet(srat, col.name = "percent.mt", assay = "RNA",
                                 features = mtgenes)
-    
+
     saveRDS(srat, file = "${params.samplename}_srat.RDS")
     """
 
@@ -420,9 +422,9 @@ process getTissue {
     file "mock/outs/spatial/detected_tissue_image.jpg"
     file "mock/outs/spatial/tissue_hires_image.png"
     file "mock/outs/spatial/tissue_positions_list.csv"
-    
+
     when: params.protocol=='visiumv1'
-    
+
     script:
     """
     spaceranger count --id=mock --fastqs=/links/groups/treutlein/USERS/tomasgomes/gene_refs/human/refdata-gex-GRCh38-2020-A/mock_fastq --transcriptome=/links/groups/treutlein/USERS/tomasgomes/gene_refs/human/refdata-gex-GRCh38-2020-A --image=${params.imagef} --slide=${params.images} --area=${params.imagear} --loupe-alignment=${params.imageal} --localcores=4
@@ -441,21 +443,21 @@ process makeSeuratVisium {
     input:
     file outbus from kallisto_count
     file umic from kallisto_umic.collect()
-    
+
     output:
     file "${params.samplename}_UMIrank.pdf"
     file "${params.samplename}_UMIduplication.pdf"
     file "${params.samplename}_srat.RDS"
-    
+
     when: params.protocol=='visiumv1'
 
     script:
     """
     #!/usr/local/bin/Rscript --vanilla
-    
+
     library(Seurat)
     library(DropletUtils)
-    
+
     # read in data
     topdir = "${outbus}" # source dir
     exp = Matrix::readMM(paste0(topdir, "/genecounts.mtx")) #read matrix
@@ -463,7 +465,7 @@ process makeSeuratVisium {
     g = read.csv(paste0(topdir, "/genecounts.genes.txt"), header = F, stringsAsFactors = F)
     dimnames(exp) = list(paste0(bc\$V1,"-1"),g\$V1) # number added because of seurat format for barcodes
     count.data = Matrix::t(exp)
-                      
+
     # plot rankings for number of UMI
     br.out <- barcodeRanks(count.data)
     pdf("${params.samplename}_UMIrank.pdf", height = 5, width = 5, useDingbats = F)
@@ -472,10 +474,10 @@ process makeSeuratVisium {
     lines(br.out\$rank[o], br.out\$fitted[o], col="red")
     abline(h=metadata(br.out)\$knee, col="dodgerblue", lty=2)
     abline(h=metadata(br.out)\$inflection, col="forestgreen", lty=2)
-    legend("bottomleft", lty=2, col=c("dodgerblue", "forestgreen"), 
+    legend("bottomleft", lty=2, col=c("dodgerblue", "forestgreen"),
         legend=c("knee", "inflection"))
     dev.off()
-    
+
     # UMI duplication
     umi = read.table("${umic}", sep = "\t", header = F, stringsAsFactors = F)
     sumUMI = c()
@@ -483,36 +485,36 @@ process makeSeuratVisium {
     for(i in 0:250){ sumUMI = c(sumUMI, sum(umi\$V4[umi\$V4>i])/sumi) }
     pdf("${params.samplename}_UMIduplication.pdf", height = 3.5, width = 7, useDingbats = F)
     par(mfrow = c(1,2))
-    plot(sumUMI, ylim = c(0,1), pch = 20, col = "grey30", ylab = "% of total reads", 
+    plot(sumUMI, ylim = c(0,1), pch = 20, col = "grey30", ylab = "% of total reads",
          xlab = "More than xx UMI", main = "${params.samplename}")
     diffUMI = sumUMI[-length(sumUMI)] - sumUMI[-1]
-    plot(diffUMI, ylim = c(0,0.2), pch = 20, col = "grey30", ylab = "Change in % of total reads", 
+    plot(diffUMI, ylim = c(0,0.2), pch = 20, col = "grey30", ylab = "Change in % of total reads",
          xlab = "More than xx UMI", main = "${params.samplename}")
     dev.off()
 
     # create Seurat object
     srat <- CreateSeuratObject(counts = count.data, assay = "Spatial") # create object
-    image <- Read10X_Image(image.dir = paste0(topdir, "/mock/outs/spatial/"), 
+    image <- Read10X_Image(image.dir = paste0(topdir, "/mock/outs/spatial/"),
                            filter.matrix = FALSE) # read in the images
     image <- image[Cells(x = srat)] # filter image by the spots
     DefaultAssay(object = image) <- "Spatial" # set default assay
     srat[["slice1"]] <- image # slice name might be changed
-    
+
     # estimate ambient proportion
     amb_prop = estimateAmbience(count.data)[rownames(srat@assays\$Spatial@meta.features)]
     srat@assays\$Spatial@meta.features = data.frame(row.names = rownames(srat@assays\$Spatial@meta.features),
                                                     "ambient_prop" = amb_prop)
-    
+
     # get MT% (genes curated from NCBI chrMT genes)
-    mtgenes = c("COX1", "COX2", "COX3", "ATP6", "ND1", "ND5", "CYTB", "ND2", "ND4", 
+    mtgenes = c("COX1", "COX2", "COX3", "ATP6", "ND1", "ND5", "CYTB", "ND2", "ND4",
                 "ATP8", "MT-CO1", "COI", "LOC9829747")
     mtgenes = c(mtgenes, paste0("MT", mtgenes), paste0("MT-", mtgenes))
     mtall = paste0("-",paste(mtgenes, collapse="\$|-"))
     mtgenes = grep(mtall, rownames(srat), value = T, ignore.case = T)
     #mtgenes = mtgenes[mtgenes %in% g[,1]]
-    srat = PercentageFeatureSet(srat, col.name = "percent.mt", assay = "Spatial", 
+    srat = PercentageFeatureSet(srat, col.name = "percent.mt", assay = "Spatial",
                                 features = mtgenes)
-    
+
     saveRDS(srat, file = "${params.samplename}_srat.RDS")
     """
 }
