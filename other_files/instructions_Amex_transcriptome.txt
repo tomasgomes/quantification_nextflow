@@ -1,0 +1,193 @@
+#####################################
+#					                  				#
+###### MAKING KALLISTO INDICES ######
+#							                  		#
+#####################################
+
+# TUTORIALS
+https://www.kallistobus.tools/velocity_index_tutorial.html
+https://www.kallistobus.tools/velocity_tutorial.html
+
+
+# GET GENOME AND TRANSCRIPTOME
+
+## get full genome (chromosomes + other contigs)
+wget https://www.dropbox.com/sh/64jj2pg2wj1s3cp/AAB12E_ZhANIEVKQmVpm8UKNa/AmexG_v6.DD.corrected.round2.chr.fa.gz
+wget https://www.dropbox.com/sh/64jj2pg2wj1s3cp/AAB4WJi74cVrdw9TmrjQpG39a/AmexG_v6.DD.corrected.round2.masked.unscaffolded.fa
+cat AmexG_v6.DD.corrected.round2.chr.fa /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/AmexG_v6.DD.corrected.round2.masked.unscaffolded.fa > AmexG_v6.DD.corrected.round2.chr.unscaffolded.fa
+
+## ger the full cDNA transcriptome
+wget https://www.dropbox.com/sh/qi2z8iemg1e7ydi/AABIYlH0pkehuE3nyin6b0m7a/AmexT_v47.FULL.gtf.gz
+wget https://www.dropbox.com/sh/qi2z8iemg1e7ydi/AADSQBLlv5pJJIEMwhfP3TGIa/AmexT_v47.FULL.fa.gz
+
+
+
+# NORMAL REFERENCE (EXONS ONLY)
+
+## get t2g file from GTF
+python get_t2g_gtf.py AmexT_v47.FULL.gtf AmexT_v47.FULL_t2g.txt AmexT_v47.FULL_genenames_t2g.txt AmexT_v47.FULL_t2g_note.txt
+
+## add artificial sequences
+cat AmexT_v47.FULL.fa ../../other/all_artificial.fa > AmexT_v47_artificial.fa
+cat AmexT_v47.FULL_t2g.txt ../../other/t2g_all_art.txt > AmexT_v47_artificial_t2g.txt
+cat AmexT_v47.FULL_genenames_t2g.txt ../../other/t2g_all_art.txt > AmexT_v47_artificial_genenames_t2g.txt
+
+## get kallisto index
+conda activate kalbus
+kallisto index -i AmexT_v47_artificial_kallistoindex -k 31 --make-unique AmexT_v47_artificial.fa
+
+
+
+# REFERENCE WITH MERGED GENES (EXONS ONLY)
+
+## obtain gtf with just the transcripts
+grep -P "\texon\t" AmexT_v47.FULL.gtf > AmexT_v47.exon.gtf
+
+## get gene-gene name t2g
+python getExont2g.py AmexT_v47.exon.gtf t2g_exon.txt
+### in R
+rrr = read.table("t2g_exon.txt", header = F, stringsAsFactors = F, sep = "\t")
+abcd = tapply(rrr$V2, rrr$V1, function(x) names(table(x)[which.max(table(x))]))
+write.table(reshape2::melt(abcd), "t2g_exon_unique.txt",  col.names = F, row.names = F, quote = F, sep = "\t")
+
+# reformat exon description to have them merge by gene
+python simplifyExonsDesc.py AmexT_v47.exon.gtf AmexT_v47.exon_simp.gtf
+
+## get FASTA
+gffread -g AmexG_v6.DD.corrected.round2.chr.unscaffolded.fa -w AmexG_v6.DD.corrected.round2.chr.unscaffolded.exons.fa AmexT_v47.exon_simp.gtf
+
+## make kallisto index of exons
+conda activate kalbus
+kallisto index -i AmexT_v47_exons_kallistoindex -k 31 --make-unique AmexG_v6.DD.corrected.round2.chr.unscaffolded.exons.fa
+
+
+
+# REFERENCE WITH FULL TRANSCRIPTS
+
+## obtain gtf with just the transcripts
+grep -P "\ttranscript\t" AmexT_v47.FULL.gtf > AmexT_v47.transcript.gtf
+
+## simplify GTF gene names
+python simplify_gtf_ids.py AmexT_v47.transcript.gtf AmexT_v47.transcript_simp.gtf
+
+## get FASTA with full transcript (introns + exons)
+gffread -g AmexG_v6.DD.corrected.round2.chr.unscaffolded.fa -w AmexG_v6.DD.corrected.round2.chr.unscaffolded.full_transcript.fa /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/AmexT_v47.transcript_simp.gtf
+
+## correct fasta header to include the transcript name instead of the gene annotations
+python getTranscriptFastaHead.py AmexG_v6.DD.corrected.round2.chr.unscaffolded.full_transcript.fa AmexG_v6.DD.corrected.round2.chr.unscaffolded.full_transcript_corr.fa
+
+## add artificial sequences (the t2g can be the same as the one for the cDNA)
+cat AmexG_v6.DD.corrected.round2.chr.unscaffolded.full_transcript_corr.fa ../other/all_artificial.fa > Amex_Tv47_Gv6.full_transcript_artificial.fa
+cat AmexT_v47.FULL_t2g.txt ../../other/t2g_all_art.txt > AmexT_v47_artificial_t2g.txt
+cat AmexT_v47.FULL_genenames_t2g.txt ../../other/t2g_all_art.txt > AmexT_v47_artificial_genenames_t2g.txt
+
+## get kallisto index
+conda activate nextflowenv
+kallisto index -i AmexT_v47_full_transcript_artificial_kallistoindex -k 31 --make-unique Amex_Tv47_Gv6.full_transcript_artificial.fa
+
+
+
+# REFERENCE FOR RNA VELOCITY (CDNA + INTRONS WITH READ_LENGTH-1 OVERHANGS)
+
+## ger the full cDNA transcriptome
+wget https://www.dropbox.com/sh/qi2z8iemg1e7ydi/AABIYlH0pkehuE3nyin6b0m7a/AmexT_v47.FULL.gtf.gz
+wget https://www.dropbox.com/sh/qi2z8iemg1e7ydi/AADSQBLlv5pJJIEMwhfP3TGIa/AmexT_v47.FULL.fa.gz
+
+## get introns from gtf (in R)
+library(gread)
+library(rtracklayer)
+gtf <- read_format("AmexT_v47.FULL.gtf")
+ans <- construct_introns(gtf, update=F)[]
+ans = sort(ans)
+ans$transcript_id = paste0(ans$transcript_id, ".I", 1:length(ans))
+export(ans, "AmexT_v47.intronsOnly.gtf")
+ans90 = ans+90
+start(ans90)[start(ans90)<1] = 1
+export(ans90, "AmexT_v47.intronsOnly_plus90.gtf")
+
+## correct feature type so that gffread works
+sed 's/sequence_feature/exon/g' ./AmexT_v47.intronsOnly.gtf | sed 's/intron/exon/g' - > AmexT_v47.intronsOnly_corr.gtf
+sed 's/sequence_feature/exon/g' ./AmexT_v47.intronsOnly_plus90.gtf | sed 's/intron/exon/g' - > AmexT_v47.intronsOnly_plus90_corr.gtf
+
+## get fasta for cDNA with artificial sequences
+cat AmexT_v47.FULL.fa ../../other/all_artificial.fa > AmexT_v47_artificial.fa
+cat AmexT_v47.FULL_t2g.txt ../../other/t2g_other.txt > t2g.txt
+
+## get fasta
+gffread -g AmexG_v6.DD.corrected.round2.chr.unscaffolded.fa -w AmexG_v6.DD.corrected.round2.chr.unscaffolded.intronsOnly_plus90.fa AmexT_v47.intronsOnly_plus90_corr.gtf
+
+## correct fasta header
+python getTranscriptFastaHead.py AmexG_v6.DD.corrected.round2.chr.unscaffolded.intronsOnly_plus90.fa AmexG_v6.DD.corrected.round2.chr.unscaffolded.intronsOnly_plus90_corr.fa
+
+## get t2g for introns (for gene IDs and for predicted gene names)
+python get_t2g_gtf_introns.py AmexT_v47.intronsOnly_plus90_corr.gtf AmexT_v47.introns_t2g.txt AmexT_v47.introns_genenames_t2g.txt AmexT_v47.introns_t2g_note.txt AmexT_v47.introns_list.txt
+
+## prepare final files to build index
+cat cDNA_transcripts/AmexT_v47_artificial.fa introns/AmexG_v6.DD.corrected.round2.chr.unscaffolded.intronsOnly_plus90_corr.fa > introns/AmexT_v47_artificial_introns.fa
+cat cDNA_transcripts/AmexT_v47_artificial_genenames_t2g.txt introns/AmexT_v47.introns_genenames_t2g.txt > introns/AmexT_v47_artificial_introns_genenames_t2g.txt
+
+## get kallisto index
+kallisto index -i introns/AmexT_v47_artificial_introns.kalid -k 31 introns/AmexT_v47_artificial_introns.fa
+
+## after correct and sort, quantify spliced and unspliced (copied from manual)
+bustools capture -o cDNA_capture/ -c cDNA_transcripts/AmexT_v47_artificial_list.txt -e matrix.ec -t transcripts.txt output.correct.sort.bus
+bustools capture -o introns_capture/ -c introns/AmexT_v47.introns_list.txt-e matrix.ec -t transcripts.txt output.correct.sort.bus
+bustools count -o unspliced/u -g introns/AmexT_v47_artificial_introns_genenames_t2g.txt -e cDNA_capture/split.ec -t transcripts.txt --genecounts cDNA_capture/split.bus
+bustools count -o spliced/s -g introns/AmexT_v47_artificial_introns_genenames_t2g.txt -e introns_capture/split.ec -t transcripts.txt --genecounts introns_capture/split.bus
+
+
+
+# Index transcriptome with introns (VERY LARGE)
+
+bsub -o kalid.bsub -e kalid.bsub -M 100000 -R "rusage[mem=100000] select[mem>100000] span[hosts=1]" -n 21 -q ultramem.24h kallisto index -i Amex_Tv47_Gv6.full_transcript_artificial.kalid -k 31 --make-unique Amex_Tv47_Gv6.full_transcript_artificial.fa
+
+bsub -o kalid.bsub -e kalid.bsub -M 100000 -R "rusage[mem=100000] select[mem>100000] span[hosts=1]" -n 21 -q ultramem.24h kallisto index -i AmexT_v47_artificial_introns.kalid -k 31 --make-unique AmexT_v47_artificial_introns.fa
+
+
+
+
+
+# Example runs
+
+nextflow run kallisto_pipeline.nf --transcriptome /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/full_transcript/Amex_Tv47_Gv6.full_transcript_artificial.fa --transindex Amex_Tv47_Gv6.full_transcript_artificial.kalid --t2g /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/full_transcript/AmexT_v47_artificial_genenames_t2g.txt --white /links/groups/treutlein/USERS/tomasgomes/gene_refs/other/10xv3_whitelist.txt --samplename "L_1_nuc" --outdir /links/groups/treutlein/USERS/tomasgomes/data/axolotl/ --protocol 10xv3 --reads "/local1/DATA/sequencing/20210114_P1408_SOPHIE_axolotl_brain/raw/L_1/*.fastq.gz"
+
+nextflow run kallisto_pipeline.nf --transcriptome /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/full_transcript/Amex_Tv47_Gv6.full_transcript_artificial.fa --transindex Amex_Tv47_Gv6.full_transcript_artificial.kalid --t2g /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/full_transcript/AmexT_v47_artificial_genenames_t2g.txt --white /links/groups/treutlein/USERS/tomasgomes/gene_refs/other/10xv3_whitelist.txt --samplename "L_1_nuc" --outdir /links/groups/treutlein/USERS/tomasgomes/data/axolotl/ --protocol 10xv3 --reads "/local1/DATA/sequencing/20210114_P1408_SOPHIE_axolotl_brain/raw/L_1/*.fastq.gz"
+
+nextflow run kallisto_pipeline.nf --transcriptome /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/full_transcript/Amex_Tv47_Gv6.full_transcript_artificial.fa --transindex Amex_Tv47_Gv6.full_transcript_artificial.kalid --t2g /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/full_transcript/AmexT_v47_artificial_genenames_t2g.txt --white /links/groups/treutlein/USERS/tomasgomes/gene_refs/other/10xv2_whitelist.txt --samplename "SRR10034310_10x_full" --outdir /links/groups/treutlein/USERS/tomasgomes/data/axolotl/ --protocol 10xv2 --reads "/links/groups/treutlein/USERS/tomasgomes/projects/axolotl/data/raw/Rodgers2020_Ambmex/SRR10034307/*.fastq.gz"
+
+
+
+
+
+
+
+
+# KALLISTO EXAMPLE FOR VISIUM DATA
+
+../bin/spaceranger-1.1.0/spaceranger count --id=A1_Animal1_Control --fastqs=/cluster/project/treutlein/USERS/tomasgomes/spatial_axo/data/fastq --transcriptome=/cluster/project/treutlein/USERS/tomasgomes/spatial_axo/Am_6.0_dna_mcherry_eGFP_tdTomato_ERCC_spaceranger_ref --image=/cluster/project/treutlein/USERS/tomasgomes/spatial_axo/A1_large_image1.jpg --slide=V19S23-109 --area=A1 --loupe-alignment=/cluster/project/treutlein/USERS/tomasgomes/spatial_axo/V19S23-109-A1.json --localcores=20 --localmem=200
+
+
+*/SPATIAL_IMAGING_CS/ALIGN_FIDUCIALS/fork0/chnk0-u2c7b55ed71/files
+aligned_fiducials.jpg
+scalefactors_json.json
+fiducial_positions_list.txt
+spot_positions_list.txt
+
+*/SPATIAL_IMAGING_CS/DETECT_TISSUE/fork0/chnk0-u2c7b55ed72/files
+detected_tissue_image.jpg
+tissue_positions_list.csv
+barcodes_under_tissue.json
+
+*/SPATIAL_IMAGING_CS/STANDARDIZE_IMAGES/fork0/join-u2c7b55ed55/files/tissue_hires_image.json
+tissue_hires_image.png
+tissue_lowres_image.png
+
+
+kallisto bus -i /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/AmexT_v47_artificial_kallistoindex -o ./spatial2/114_A1/ -t 8 -x 0,0,16:0,16,28:1,0,0 /local1/DATA/sequencing/20201023_P1341_ASHLEY_10XVISIUM_brain_pallium_axolotl/raw/114_A1/BSSE_QGF_153780_HVVHGBGXG_1_114_A1_SI-TT-A4__S1_L001_R1_001.fastq.gz /local1/DATA/sequencing/20201023_P1341_ASHLEY_10XVISIUM_brain_pallium_axolotl/raw/114_A1/BSSE_QGF_153780_HVVHGBGXG_1_114_A1_SI-TT-A4__S1_L001_R2_001.fastq.gz /local1/DATA/sequencing/20201023_P1341_ASHLEY_10XVISIUM_brain_pallium_axolotl/raw/114_A1/BSSE_QGF_153780_HVVHGBGXG_1_114_A1_SI-TT-A4__S1_L002_R1_001.fastq.gz /local1/DATA/sequencing/20201023_P1341_ASHLEY_10XVISIUM_brain_pallium_axolotl/raw/114_A1/BSSE_QGF_153780_HVVHGBGXG_1_114_A1_SI-TT-A4__S1_L002_R2_001.fastq.gz /local1/DATA/sequencing/20201023_P1341_ASHLEY_10XVISIUM_brain_pallium_axolotl/raw/114_A1/BSSE_QGF_153780_HVVHGBGXG_1_114_A1_SI-TT-A4__S1_L003_R1_001.fastq.gz /local1/DATA/sequencing/20201023_P1341_ASHLEY_10XVISIUM_brain_pallium_axolotl/raw/114_A1/BSSE_QGF_153780_HVVHGBGXG_1_114_A1_SI-TT-A4__S1_L003_R2_001.fastq.gz /local1/DATA/sequencing/20201023_P1341_ASHLEY_10XVISIUM_brain_pallium_axolotl/raw/114_A1/BSSE_QGF_153780_HVVHGBGXG_1_114_A1_SI-TT-A4__S1_L004_R1_001.fastq.gz /local1/DATA/sequencing/20201023_P1341_ASHLEY_10XVISIUM_brain_pallium_axolotl/raw/114_A1/BSSE_QGF_153780_HVVHGBGXG_1_114_A1_SI-TT-A4__S1_L004_R2_001.fastq.gz
+
+bustools correct -w ../genomes/visium-v1_whitelist.txt -o ./spatial2/114_A1/output.corr.bus ./spatial2/114_A1/output.bus
+
+bustools sort -t 8 -o ./spatial2/114_A1/output.sort.bus ./spatial2/114_A1/output.corr.bus
+
+bustools count --em -t ./spatial2/114_A1/transcripts.txt -e ./spatial2/114_A1/matrix.ec -g ../genomes/Ambmex/Am_6.0/t2g.txt --genecounts -o ./spatial2/114_A1/output.sort_em ./spatial2/114_A1/output.sort.bus
+
