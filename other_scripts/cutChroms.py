@@ -8,11 +8,11 @@
 from sys import argv
 from os import system
 
-chrsizes = argv[1]
-gtffile = argv[2]
-outgtf = argv[3]
-outcut = argv[4]
-outdir = argv[5]
+chrsizes = argv[1] # chromosome sizes
+gtffile = argv[2] # input gtf for gene coordinates
+outgtf = argv[3] # new gene coordinates
+outcut = argv[4] # cut coordinates
+outdir = argv[5] # output directory for the new cut chromosomes
 maxSize = int(argv[6]) # 500000000
 spSize = int(argv[7]) # 2000
 cutdic = {}

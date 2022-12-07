@@ -49,11 +49,38 @@ Files in `other_files/`:
  
 
 Files in `other_scripts/`:  
+
  - `convertCoords.py` - convert chromosome coordinates in a BED file from a chopped down genome back into the original
   - example: `python3 convertCoords.py chrNameLength.txt input.bed output.bed`
  - `convertCoords_indiv.py` - convert specific chromosome coordinates from a chopped down genome back into the original
   - example: `python3 convertCoords_indiv.py chrNameLength.txt chr1ps3:213318726-213320220`
- - `cutChroms.py` - 
+ - `cutChroms.py` - script to cut chromosomes into a specific maximum length. also prevents cutting in the middle of genes, including giving additional space around its ends
+  - requires preparation:
+  ```
+  # split genome into individual chromosomes
+  faidx --split-files ../AmexG_v6.DD.corrected.round2.chr.fa
+  # return chromosome sizes
+  faidx ../AmexG_v6.DD.corrected.round2.chr.fa -i chromsizes > AmexG_v6.DD.corrected.round2.chr.sizes
+  ```
+  - example: `python cutChroms.py AmexG_v6_chr/AmexG_v6.DD.corrected.round2.chr.sizes ../AmexT_v47.FULL_corr_chr.gtf AmexG_v6_chr/AmexT_v47.FULL_corr_chr_cut.gtf AmexG_v6_chr/cutcoord.txt AmexG_v6_chr 500000000 2000`
+ - `get_t2g_gtf.py` - script to extract gene ID and gene names from gtf file, and compile a `t2g.txt` file for kallisto. Returns gene ID and gene name versions, as well as a full annotation version.
+  - this is taylored to the axolotl GTF file
+  - example: `python get_t2g_gtf.py AmexT_v47.FULL_corr_chr.gtf t2g.txt t2g_genenames.txt t2g_note.txt`
+ - `get_t2g_gtf_introns.py` - script to extract gene ID and gene names from gtf file, for use in a gtf file with introns (for kallisto RNA velocity)
+  - example: `python get_t2g_gtf.py AmexT_v47.FULL_corr_chr.gtf AmexT_v47.introns_t2g.txt AmexT_v47.introns_genenames_t2g.txt AmexT_v47.introns_t2g_note.txt AmexT_v47.introns_list.txt`
+ - `getTranscriptFastaHead.py` - simplifies fasta header to only have gene ID
+  - example: `python getTranscriptFastaHead.py AmexT_v47_CDS_reformatted.fa AmexT_v47.FULL.fa`
+ - `getExonFastaHead.py` - simplifies fasta header to only have gene ID, for a fasta with exon sequences. each gene name will get an added number (.1, .2, ...) depending on the exon number
+  - I couldn't find the original use case for this...
+  - example: `python getExonFastaHead.py AmexT_v47_CDS_reformatted.fa AmexT_v47.FULL.fa exon_list.txt`
+ - `getExont2g.py` - make a `t2g.txt` file from a GTF, for exons
+  - example: `python getExont2g.py AmexT_v47.FULL_corr_chr.gtf exons_t2g.txt`
+ - `list_annotations.py` - create a new file with gene annotations
+  - I couldn't find the original use case for this, and not entirely sure what the input and output is...
+ - `simplify_gtf_ids.py` - simplify the gene annotations in a gtf file
+  - I couldn't find the original use case for this
+ - `simplifyExonsDesc.py` - simplify exon description
+  - I couldn't find the original use case for this, and not entirely sure what the input and output is...
  
  
  
