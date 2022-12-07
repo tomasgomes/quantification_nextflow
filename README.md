@@ -44,8 +44,16 @@ Files in `other_files/`:
  - `nextflowenv.yaml` - conda environment used to run the pipeline  
  - `kallisto_batch.txt` - example batch file for Smart-seq2  
  - `barcode_whitelists/` - several files with barcode whitelists vor various 10x protocols (compressed) 
- - `axolotl_genome_cut.config` - a config file to index the axolotl (cut) genome for cellranger-ARC
+ - `axolotl_genome_cut.config` - an example config file to index the axolotl (cut) genome for cellranger-ARC
+ - `chrNameLength.txt` - example file with chromosome name and length (a STAR indexing output)
  
+
+Files in `other_scripts/`:  
+ - `convertCoords.py` - convert chromosome coordinates in a BED file from a chopped down genome back into the original
+  - example: `python3 convertCoords.py chrNameLength.txt input.bed output.bed`
+ - `convertCoords_indiv.py` - convert specific chromosome coordinates from a chopped down genome back into the original
+  - example: `python3 convertCoords_indiv.py chrNameLength.txt chr1ps3:213318726-213320220`
+ - `cutChroms.py` - 
  
  
  
