@@ -43,7 +43,8 @@ Files in `other_files/`:
  - `instructions_Amex_transcriptome.txt` - (older) instructions on how to format the axolotl transcriptome to fit with kallisto, as well as overall use of the pipeline  
  - `nextflowenv.yaml` - conda environment used to run the pipeline  
  - `kallisto_batch.txt` - example batch file for Smart-seq2  
- - `barcode_whitelists/` - several files with barcode whitelists vor various 10x protocols (compressed)  
+ - `barcode_whitelists/` - several files with barcode whitelists vor various 10x protocols (compressed) 
+ - `axolotl_genome_cut.config` - a config file to index the axolotl (cut) genome for cellranger-ARC
  
  
  
