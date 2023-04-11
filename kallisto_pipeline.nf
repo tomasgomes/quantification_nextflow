@@ -74,7 +74,7 @@ if(!params.samplename) exit 1, "Please provide a name for this sample"
 if(!params.protocol) exit 1, "Please provide an adequate protocol"
 
 if(!params.white && params.protocol!='plate'){
-    exit 1, "Barcode whitelist is mandatory for Chromium and Visium runs."
+    exit 1, "Barcode whitelist is mandatory for Chromium, Visium, and ParseBio runs."
 } else if (params.protocol!='plate'){
     Channel.fromPath(params.white)
         .set{bc_wl_kal}
@@ -178,7 +178,7 @@ process pseudoal {
             -i $index \\
             -o ${params.samplename} \\
             -x 0,0,16:0,16,28:1,0,0 \\
-            -t 10 \\
+            -t 12 \\
             $reads
         """
     else
@@ -187,7 +187,7 @@ process pseudoal {
             -i $index \\
             -o ${params.samplename} \\
             -x ${params.protocol} \\
-            -t 10 \\
+            -t 12 \\
             $reads
         """
 }
@@ -215,7 +215,7 @@ process corrsort {
     script:
     """
     bustools correct -w $white -o ${outbus}/output.cor.bus ${outbus}/output.bus
-    bustools sort -o ${outbus}/output.cor.sort.bus -t 8 ${outbus}/output.cor.bus
+    bustools sort -o ${outbus}/output.cor.sort.bus -t 100 ${outbus}/output.cor.bus
     """
 }
 
@@ -306,7 +306,7 @@ process makeSeuratPlate {
     mtgenes = c(mtgenes, paste0("MT", mtgenes), paste0("MT-", mtgenes))
     mtall = paste0("-",paste(mtgenes, collapse="\$|-"))
     mtgenes = grep(mtall, rownames(srat), value = T, ignore.case = T)
-    #mtgenes = mtgenes[mtgenes %in% rownames(exp_gene)]
+    #mtgenes = mtgenes[mtgenes %in% g[,1]]
     srat = PercentageFeatureSet(srat, col.name = "percent.mt", assay = "RNA",
                                 features = mtgenes)
 
@@ -386,6 +386,129 @@ process makeSeurat10x {
     ## we're only keeping what might potentially be a cell (by DD or ED)
     srat = CreateSeuratObject(counts = count.data[,iscell_dd | iscell_ed],
                               meta.data = meta[iscell_dd | iscell_ed,])
+    amb_prop = estimateAmbience(count.data)[rownames(srat@assays\$RNA@meta.features)]
+    srat@assays\$RNA@meta.features = data.frame(row.names = rownames(srat@assays\$RNA@meta.features),
+                                                "ambient_prop" = amb_prop)
+
+    # get MT% (genes curated from NCBI chrMT genes)
+    mtgenes = c("COX1", "COX2", "COX3", "ATP6", "ND1", "ND5", "CYTB", "ND2", "ND4",
+                "ATP8", "MT-CO1", "COI", "LOC9829747")
+    mtgenes = c(mtgenes, paste0("MT", mtgenes), paste0("MT-", mtgenes))
+    mtall = paste0("-",paste(mtgenes, collapse="\$|-"))
+    mtgenes = grep(mtall, rownames(srat), value = T, ignore.case = T)
+    #mtgenes = mtgenes[mtgenes %in% g[,1]]
+    srat = PercentageFeatureSet(srat, col.name = "percent.mt", assay = "RNA",
+                                features = mtgenes)
+
+    saveRDS(srat, file = "${params.samplename}_srat.RDS")
+    """
+
+}
+
+/*
+ * Step 5. Make Seurat object for ParseBio
+ */
+process makeSeuratParse {
+
+    storeDir "${params.outdir}/${params.samplename}"
+
+    input:
+    file outbus from kallisto_count
+    file umic from kallisto_umic.collect()
+
+    output:
+    file "${params.samplename}_UMIrank.pdf"
+    //file "${params.samplename}_UMIduplication.pdf"
+    file "${params.samplename}_srat.RDS"
+
+    when: params.protocol=='SPLiT-seq'
+
+    script:
+    """
+    #!/usr/local/bin/Rscript --vanilla
+
+    library(Seurat)
+    library(DropletUtils)
+    library(DelayedArray)
+
+    # read in data
+    topdir = "${outbus}" # source dir
+    exp = Matrix::readMM(paste0(topdir, "/genecounts.mtx")) #read matrix
+    bc = read.csv(paste0(topdir, "/genecounts.barcodes.txt"), header = F, stringsAsFactors = F)
+    g = read.csv(paste0(topdir, "/genecounts.genes.txt"), header = F, stringsAsFactors = F)
+    dimnames(exp) = list(paste0(bc[,1],"-1"), g[,1]) # number added because of seurat format for barcodes
+    exp = exp[Matrix::rowSums(exp)>0,]
+
+    # summarise cells based on well
+    well_file = "${params.white}"
+    well_file = gsub("_whitelist_", "_wells_", well_file)
+    well_file = read.csv(well_file, header = T)
+    well_file\$barcode = paste0(well_file\$barcode, "-1")
+
+    maxbc1 = max(well_file\$bci1)/2
+    l_sum = list()
+    for(i in 1:maxbc1){
+      sub_well_file = well_file[well_file\$bci1 %in% c(i, i+maxbc1),]
+      sub_well_file = sub_well_file[sub_well_file\$barcode %in% rownames(exp),]
+
+      sub_exp = as(exp[sub_well_file\$barcode,], "CsparseMatrix")
+      sub_exp = DelayedArray::rowsum(sub_exp, group = sub_well_file\$well_combo[match(rownames(sub_exp), sub_well_file\$barcode)])
+      rownames(sub_exp) = sub_well_file\$barcode[!duplicated(sub_well_file[,2])]
+
+      l_sum[[i]] = as(sub_exp, "CsparseMatrix")
+    }
+    exp = do.call(rbind, l_sum)
+    sub_well_file = well_file[well_file\$barcode %in% rownames(exp),]
+
+    # transpose
+    count.data = Matrix::t(exp)
+
+    # plot rankings for number of UMI
+    br.out <- barcodeRanks(count.data)
+    pdf("${params.samplename}_UMIrank.pdf", height = 5, width = 5, useDingbats = F)
+    plot(br.out\$rank, br.out\$total, log="xy", xlab="Rank", ylab="Total")
+    o <- order(br.out\$rank)
+    lines(br.out\$rank[o], br.out\$fitted[o], col="red")
+    abline(h=metadata(br.out)\$knee, col="dodgerblue", lty=2)
+    abline(h=metadata(br.out)\$inflection, col="forestgreen", lty=2)
+    legend("bottomleft", lty=2, col=c("dodgerblue", "forestgreen"),
+        legend=c("knee", "inflection"))
+    dev.off()
+
+    # get emptyDrops and default cutoff cell estimates
+    iscell_dd = defaultDrops(count.data, expected = 10000)
+    eout = emptyDrops(count.data, lower = 200)
+    eout\$FDR[is.na(eout\$FDR)] = 1
+    iscell_ed = eout\$FDR<=0.01
+    meta = data.frame(row.names = colnames(count.data),
+                      iscell_dd = iscell_dd,
+                      iscell_ed = iscell_ed,
+                      iscell_inflexion = br.out\$total>=metadata(br.out)\$inflection,
+                      iscell_knee = br.out\$total>=metadata(br.out)\$knee)
+    meta = merge(meta, sub_well_file, by.x = 0, by.y = 1)
+    rownames(meta) = meta[,1]
+    meta = meta[,-1]
+
+    # UMI duplication
+    #umi = read.table("${umic}", sep = "\t", header = F, stringsAsFactors = F)
+    #sumUMI = c()
+    #sumi = sum(umi\$V4)
+    #for(i in 0:250){ sumUMI = c(sumUMI, sum(umi\$V4[umi\$V4>i])/sumi) }
+    #pdf("${params.samplename}_UMIduplication.pdf", height = 3.5, width = 7, useDingbats = F)
+    #par(mfrow = c(1,2))
+    #plot(sumUMI, ylim = c(0,1), pch = 20, col = "grey30", ylab = "% of total reads",
+    #     xlab = "More than xx UMI", main = "${params.samplename}")
+    #diffUMI = sumUMI[-length(sumUMI)] - sumUMI[-1]
+    #plot(diffUMI, ylim = c(0,0.2), pch = 20, col = "grey30", ylab = "Change in % of total reads",
+    #     xlab = "More than xx UMI", main = "${params.samplename}")
+    #dev.off()
+
+    # create Seurat object
+    ## we're only keeping what might potentially be a cell (by DD or ED)
+    cells_keep = meta\$iscell_dd | meta\$iscell_ed | meta\$iscell_inflexion | meta\$iscell_knee
+    sub_meta = meta[cells_keep,]
+    srat = CreateSeuratObject(counts = count.data[,rownames(sub_meta)],
+                              meta.data = sub_meta)
     amb_prop = estimateAmbience(count.data)[rownames(srat@assays\$RNA@meta.features)]
     srat@assays\$RNA@meta.features = data.frame(row.names = rownames(srat@assays\$RNA@meta.features),
                                                 "ambient_prop" = amb_prop)
