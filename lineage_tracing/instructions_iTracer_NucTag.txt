@@ -1,0 +1,39 @@
+
+# need plasmid fasta and to make GTF for each sequence
+## original iTracer:
+/links/groups/treutlein/USERS/zhisong_he/Work/genomes/iTracer_barcode_scars/
+
+# in the old reference (from Zhisong)
+## pSBbi_GbgG - sequence to find barcode in GFP
+## pSMAL_v1 - sequence to find cell barcode (not used)
+## Scar - sequence to find scar in GFP
+## Scar_Tomato - sequence to find scar in RFP
+## pSBbi_RbgR - sequence to find barcode in RFP
+# in the new reference
+## Scar_GFP - iTracer sequence to find scar in GFP
+## Scar_Tomato - iTracer sequence to find scar in RFP
+## pSBbi_GbgG_endOfGFP - iTracer sequence to find barcode in GFP
+## pSBbi_RbgR_endOfRFP - iTracer sequence to find barcode in RFP
+## NucTag_barcode - NucTag sequence to find barcode in RFP
+
+# fasta ref for iTracer and NucTag: lineage_tracing/iTracer_NucTag_BarcodeScarRef.fa
+# gtf ref for iTracer and NucTag: lineage_tracing/iTracer_NucTag_BarcodeScarRef.gtf
+
+# prepare genome reference for plasmid
+/local1/TOOLS/cellranger-7.0.1/bin/cellranger mkref --genome=iTracerAndNucTagPlasmid_v1 --fasta= --genes=
+
+# run cellranger to get BAM files
+/local1/TOOLS/cellranger-7.0.1/bin/cellranger count --id=Day8_iTracer_Barcode --transcriptome=iTracerAndNucTagPlasmid_v1 ---fastqs=/links/groups/treutlein/DATA/sequencing/20230303_P2305_ASHLEY__NADYA/raw/pSBbi-iTracer-G-S3_Day8_Bar/ --sample=pSBbi-iTracer-G-S3_Day8_Bar --localcores=24 --localmem=120 --nosecondary
+/local1/TOOLS/cellranger-7.0.1/bin/cellranger count --id=Day8_iTracer_Scar --transcriptome=iTracerAndNucTagPlasmid_v1 ---fastqs=/links/groups/treutlein/DATA/sequencing/20230303_P2305_ASHLEY__NADYA/raw/pSBbi-iTracer-G-S3_Day8_scar/ --sample=pSBbi-iTracer-G-S3_Day8_scar --localcores=24 --localmem=120 --nosecondary
+
+# process BAM files to get NucTag barcodes in each cell
+## should work with a single input BAM file
+perl ExtractRFPbarcodesFromBam.pl Day8_iTracer_Barcode/outs/.bam
+perl ExtractScarsFromBam.pl Day8_iTracer_Scar/outs/.bam
+
+# quantify RNA
+## (this is human data, and Eugenio did it himself)
+
+# chack other r functions on GitHub for how to filter the barcodes etc.
+
+

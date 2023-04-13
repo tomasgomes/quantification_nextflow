@@ -81,6 +81,7 @@ Files in `other_scripts/`:
   - I couldn't find the original use case for this
  - `simplifyExonsDesc.py` - simplify exon description
   - I couldn't find the original use case for this, and not entirely sure what the input and output is...
- 
+ - `makeParseBioWhitelist.py` - build a barcode reference from PArse Bio barcode references
+  - example: python other_scripts/makeParseBioWhitelist.py /local1/USERS/hsiulin/Parse_v1.0.4/ParseBiosciences-Pipeline.1.0.4p/splitpipe/barcodes mega test
  
  
