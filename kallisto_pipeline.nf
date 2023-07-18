@@ -181,6 +181,15 @@ process pseudoal {
             -t 12 \\
             $reads
         """
+    else if(params.protocol=='sc5pe')
+        """
+        kallisto bus \\
+            -i $index \\
+            -o ${params.samplename} \\
+            -x 0,0,16:0,16,26:0,26,0,1,0,0 \\
+            -t 16 \\
+            $reads
+        """
     else
         """
         kallisto bus \\
