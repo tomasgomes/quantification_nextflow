@@ -340,7 +340,7 @@ process makeSeurat10x {
     file "${params.samplename}_UMIduplication.pdf"
     file "${params.samplename}_srat.RDS"
 
-    when: params.protocol=='10xv3' || params.protocol=='10xv2'
+    when: params.protocol=='10xv3' || params.protocol=='10xv2' || params.protocol=='sc5pe'
 
     script:
     """
