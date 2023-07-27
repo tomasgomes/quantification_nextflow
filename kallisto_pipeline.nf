@@ -8,7 +8,7 @@
  * nextflow run kallisto_pipeline.nf --transcriptome /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/cDNA_transcripts/AmexT_v47_artificial.fa --transindex AmexT_v47_artificial.kalid --t2g /links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/cDNA_transcripts/AmexT_v47_artificial_genenames_t2g.txt --samplename "Gerber_plate" --outdir /links/groups/treutlein/USERS/tomasgomes/data/axolotl/ --protocol plate --reads /links/groups/treutlein/USERS/tomasgomes/projects/axolotl/data/raw/Gerber_allcells/kallisto_batch.txt
  */
 
-
+// sc5pe taken from https://github.com/pachterlab/kallisto/issues/287
 
 /*
  * Defines necessary parameters
@@ -189,6 +189,15 @@ process pseudoal {
             -o ${params.samplename} \\
             -x 0,0,16:0,16,26:0,26,0,1,0,0 \\
             -t ${params.cores} \\
+            $reads
+        """
+    else if(params.protocol=='sc5pe')
+        """
+        kallisto bus \\
+            -i $index \\
+            -o ${params.samplename} \\
+            -x 0,0,16:0,16,26:0,26,0,1,0,0 \\
+            -t 16 \\
             $reads
         """
     else
