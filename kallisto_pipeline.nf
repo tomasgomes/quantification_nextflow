@@ -31,6 +31,7 @@ params.t2g = false
 //params.t2g = "/links/groups/treutlein/USERS/tomasgomes/gene_refs/axolotl/Amex_T_v47/cDNA_transcripts/AmexT_v47_artificial_genenames_t2g.txt"
 params.imageal = false
 params.imagef = false
+params.cores = 12
 
 
 
@@ -144,7 +145,7 @@ process pseudoalPlate {
 
     script:
     """
-    kallisto pseudo -t 16 --quant \\
+    kallisto pseudo -t ${params.cores} --quant \\
         -i $index \\
         -o ${params.samplename} \\
         -b $batchkal
@@ -178,7 +179,16 @@ process pseudoal {
             -i $index \\
             -o ${params.samplename} \\
             -x 0,0,16:0,16,28:1,0,0 \\
-            -t 12 \\
+            -t ${params.cores} \\
+            $reads
+        """
+    else if(params.protocol=='sc5pe')
+        """
+        kallisto bus \\
+            -i $index \\
+            -o ${params.samplename} \\
+            -x 0,0,16:0,16,26:0,26,0,1,0,0 \\
+            -t ${params.cores} \\
             $reads
         """
     else
@@ -187,7 +197,7 @@ process pseudoal {
             -i $index \\
             -o ${params.samplename} \\
             -x ${params.protocol} \\
-            -t 12 \\
+            -t ${params.cores} \\
             $reads
         """
 }
@@ -215,7 +225,7 @@ process corrsort {
     script:
     """
     bustools correct -w $white -o ${outbus}/output.cor.bus ${outbus}/output.bus
-    bustools sort -o ${outbus}/output.cor.sort.bus -t 100 ${outbus}/output.cor.bus
+    bustools sort -o ${outbus}/output.cor.sort.bus -t ${params.cores} ${outbus}/output.cor.bus
     """
 }
 
@@ -331,7 +341,7 @@ process makeSeurat10x {
     file "${params.samplename}_UMIduplication.pdf"
     file "${params.samplename}_srat.RDS"
 
-    when: params.protocol=='10xv3' || params.protocol=='10xv2'
+    when: params.protocol=='10xv3' || params.protocol=='10xv2' || params.protocol=='sc5pe'
 
     script:
     """
